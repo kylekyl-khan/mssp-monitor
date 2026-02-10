@@ -1,9 +1,9 @@
 global:
   resolve_timeout: 5m
   smtp_smarthost: 'smtp.gmail.com:587'
-  smtp_from: 'd8511090715@gmail.com'
-  smtp_auth_username: 'd8511090715@gmail.com'
-  smtp_auth_password: 'bzjgckwrrlauujcp'
+  smtp_from: '123456 @gmail.com'
+  smtp_auth_username: '123456@gmail.com'
+  smtp_auth_password: 'abcdefghijklmnopq'
   smtp_require_tls: true
 
 # 路由配置
