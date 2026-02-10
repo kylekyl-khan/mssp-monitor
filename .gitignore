@@ -1,0 +1,47 @@
+# 環境變數與敏感資料
+.env
+*.key
+*.pem
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+ENV/
+.venv
+
+# 資料檔案
+*.json
+!grafana/dashboards/*.json
+*.log
+*.db
+*.sqlite
+
+# Docker
+docker-compose.override.yml
+
+# 備份檔案
+backups/
+*.backup
+*.bak
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# 監控資料（由 Docker Volume 管理）
+data/
+logs/
+
+# Grafana 自動生成檔案
+grafana/data/

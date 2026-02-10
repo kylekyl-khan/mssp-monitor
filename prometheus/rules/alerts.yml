@@ -1,0 +1,98 @@
+groups:
+  - name: crowdstrike_alerts
+    interval: 60s
+    rules:
+      # 告警：Pinned CIDs 總數超過閾值
+      - alert: PinnedCIDsOverThreshold
+        expr: crowdstrike_pinned_total{threshold="375"} > 375
+        for: 5m
+        labels:
+          severity: critical
+          team: security
+        annotations:
+          summary: "CrowdStrike Pinned CIDs 超過授權閾值"
+          description: "當前 Pinned CIDs 總數為 {{ $value }}，已超過閾值 375"
+
+      # 告警：單一租戶端點數異常增加
+      - alert: TenantHostCountSpike
+        expr: |
+          (crowdstrike_host_count - crowdstrike_host_count offset 1h) 
+          / crowdstrike_host_count offset 1h * 100 > 20
+        for: 10m
+        labels:
+          severity: warning
+          team: security
+        annotations:
+          summary: "租戶 {{ $labels.tenant_name }} 端點數異常增加"
+          description: "租戶 {{ $labels.tenant_name }} (CID: {{ $labels.cid }}) 端點數在 1 小時內增加超過 20%"
+
+      # 告警：單一租戶端點數異常減少
+      - alert: TenantHostCountDrop
+        expr: |
+          (crowdstrike_host_count offset 1h - crowdstrike_host_count) 
+          / crowdstrike_host_count offset 1h * 100 > 30
+        for: 10m
+        labels:
+          severity: warning
+          team: security
+        annotations:
+          summary: "租戶 {{ $labels.tenant_name }} 端點數異常減少"
+          description: "租戶 {{ $labels.tenant_name }} (CID: {{ $labels.cid }}) 端點數在 1 小時內減少超過 30%"
+
+      # 告警：監控腳本停止運作
+      - alert: MSSPMonitorDown
+        expr: up{job="pushgateway"} == 0
+        for: 5m
+        labels:
+          severity: critical
+          team: ops
+        annotations:
+          summary: "MSSP 監控腳本停止運作"
+          description: "Pushgateway 無法連線，監控腳本可能已停止"
+
+      # 告警：InfluxDB 無法連線
+      - alert: InfluxDBDown
+        expr: up{job="influxdb"} == 0
+        for: 3m
+        labels:
+          severity: critical
+          team: ops
+        annotations:
+          summary: "InfluxDB 服務停止"
+          description: "InfluxDB 無法連線，時序資料庫可能故障"
+
+  - name: system_alerts
+    interval: 60s
+    rules:
+      # 告警：CPU 使用率過高
+      - alert: HighCPUUsage
+        expr: 100 - (avg by (hostname) (irate(cpu_usage_idle{cpu="cpu-total"}[5m])) * 100) > 80
+        for: 10m
+        labels:
+          severity: warning
+          team: ops
+        annotations:
+          summary: "主機 {{ $labels.hostname }} CPU 使用率過高"
+          description: "CPU 使用率: {{ $value | humanize }}%"
+
+      # 告警：記憶體使用率過高
+      - alert: HighMemoryUsage
+        expr: (mem_used_percent) > 85
+        for: 10m
+        labels:
+          severity: warning
+          team: ops
+        annotations:
+          summary: "主機記憶體使用率過高"
+          description: "記憶體使用率: {{ $value | humanize }}%"
+
+      # 告警：磁碟空間不足
+      - alert: DiskSpaceLow
+        expr: (disk_used_percent{path="/"}) > 85
+        for: 5m
+        labels:
+          severity: warning
+          team: ops
+        annotations:
+          summary: "磁碟空間不足"
+          description: "根目錄使用率: {{ $value | humanize }}%"

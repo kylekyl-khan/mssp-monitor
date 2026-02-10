@@ -1,0 +1,89 @@
+global:
+  resolve_timeout: 5m
+  smtp_smarthost: 'smtp.gmail.com:587'
+  smtp_from: 'd8511090715@gmail.com'
+  smtp_auth_username: 'd8511090715@gmail.com'
+  smtp_auth_password: 'bzjgckwrrlauujcp'
+  smtp_require_tls: true
+
+# 路由配置
+route:
+  group_by: ['alertname', 'cluster', 'severity']
+  group_wait: 10s
+  group_interval: 10s
+  repeat_interval: 12h
+  receiver: 'email-notifications'
+  
+  routes:
+    # Critical 告警立即發送
+    - match:
+        severity: critical
+      receiver: 'email-critical'
+      group_wait: 0s
+      repeat_interval: 4h
+    
+    # Warning 告警批次發送
+    - match:
+        severity: warning
+      receiver: 'email-warnings'
+      group_wait: 30s
+      repeat_interval: 24h
+
+# 接收器配置
+receivers:
+  # 一般通知
+  - name: 'email-notifications'
+    email_configs:
+      - to: 'kylin@aishield.com.tw'
+        headers:
+          Subject: '[Monitoring] {{ .GroupLabels.alertname }}'
+        html: |
+          <!DOCTYPE html>
+          <html>
+          <body>
+            <h2>🚨 Alert Notification</h2>
+            <table border="1" cellpadding="5">
+              <tr><th>Alert</th><td>{{ .GroupLabels.alertname }}</td></tr>
+              <tr><th>Severity</th><td>{{ .CommonLabels.severity }}</td></tr>
+              <tr><th>Summary</th><td>{{ .CommonAnnotations.summary }}</td></tr>
+              <tr><th>Description</th><td>{{ .CommonAnnotations.description }}</td></tr>
+              <tr><th>Time</th><td>{{ .StartsAt }}</td></tr>
+            </table>
+          </body>
+          </html>
+
+  # Critical 告警
+  - name: 'email-critical'
+    email_configs:
+      - to: 'kylin@aishield.com.tw'
+        headers:
+          Subject: '🔴 [CRITICAL] {{ .GroupLabels.alertname }}'
+        html: |
+          <!DOCTYPE html>
+          <html>
+          <body style="background-color: #ffe6e6;">
+            <h1 style="color: red;">🔴 CRITICAL ALERT</h1>
+            <table border="2" cellpadding="10" style="border-color: red;">
+              <tr><th>Alert</th><td><strong>{{ .GroupLabels.alertname }}</strong></td></tr>
+              <tr><th>Summary</th><td>{{ .CommonAnnotations.summary }}</td></tr>
+              <tr><th>Description</th><td>{{ .CommonAnnotations.description }}</td></tr>
+              <tr><th>Started At</th><td>{{ .StartsAt }}</td></tr>
+            </table>
+            <p style="color: red; font-weight: bold;">請立即處理此告警！</p>
+          </body>
+          </html>
+
+  # Warning 告警
+  - name: 'email-warnings'
+    email_configs:
+      - to: 'kylin@aishield.com.tw'
+        headers:
+          Subject: '⚠️  [WARNING] {{ .GroupLabels.alertname }}'
+
+# 抑制規則（避免重複告警）
+inhibit_rules:
+  - source_match:
+      severity: 'critical'
+    target_match:
+      severity: 'warning'
+    equal: ['alertname', 'cluster']

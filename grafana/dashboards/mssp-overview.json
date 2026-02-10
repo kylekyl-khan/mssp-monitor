@@ -1,0 +1,348 @@
+{
+  "dashboard": {
+    "title": "CrowdStrike MSSP Monitor",
+    "tags": ["crowdstrike", "mssp", "security"],
+    "timezone": "browser",
+    "editable": true,
+    "graphTooltip": 1,
+    "time": {
+      "from": "now-24h",
+      "to": "now"
+    },
+    "refresh": "1m",
+    "panels": [
+      {
+        "id": 1,
+        "title": "📊 Pinned CIDs 總授權使用量",
+        "type": "timeseries",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+        "targets": [
+          {
+            "datasource": "InfluxDB",
+            "query": "from(bucket: \"crowdstrike\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r[\"_measurement\"] == \"crowdstrike_pinned_summary\")\n  |> filter(fn: (r) => r[\"_field\"] == \"total_count\")\n  |> aggregateWindow(every: v.windowPeriod, fn: last, createEmpty: false)\n  |> yield(name: \"last\")",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "palette-classic"},
+            "custom": {
+              "lineWidth": 2,
+              "fillOpacity": 10,
+              "axisPlacement": "auto",
+              "drawStyle": "line",
+              "showPoints": "auto"
+            },
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"value": null, "color": "green"},
+                {"value": 350, "color": "yellow"},
+                {"value": 375, "color": "red"}
+              ]
+            }
+          }
+        },
+        "options": {
+          "legend": {"displayMode": "list", "placement": "bottom"}
+        }
+      },
+      {
+        "id": 2,
+        "title": "🎯 授權使用率儀表板",
+        "type": "gauge",
+        "gridPos": {"h": 8, "w": 6, "x": 12, "y": 0},
+        "targets": [
+          {
+            "datasource": "InfluxDB",
+            "query": "from(bucket: \"crowdstrike\")\n  |> range(start: -5m)\n  |> filter(fn: (r) => r[\"_measurement\"] == \"crowdstrike_pinned_summary\")\n  |> filter(fn: (r) => r[\"_field\"] == \"total_count\")\n  |> last()\n  |> map(fn: (r) => ({r with _value: r._value / 375.0 * 100.0}))",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "min": 0,
+            "max": 150,
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"value": 0, "color": "green"},
+                {"value": 80, "color": "yellow"},
+                {"value": 95, "color": "orange"},
+                {"value": 100, "color": "red"}
+              ]
+            }
+          }
+        },
+        "options": {
+          "orientation": "auto",
+          "showThresholdLabels": true,
+          "showThresholdMarkers": true
+        }
+      },
+      {
+        "id": 3,
+        "title": "📈 當前數值",
+        "type": "stat",
+        "gridPos": {"h": 8, "w": 6, "x": 18, "y": 0},
+        "targets": [
+          {
+            "datasource": "InfluxDB",
+            "query": "from(bucket: \"crowdstrike\")\n  |> range(start: -5m)\n  |> filter(fn: (r) => r[\"_measurement\"] == \"crowdstrike_pinned_summary\")\n  |> filter(fn: (r) => r[\"_field\"] == \"total_count\")\n  |> last()",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "thresholds"},
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"value": null, "color": "green"},
+                {"value": 350, "color": "yellow"},
+                {"value": 375, "color": "red"}
+              ]
+            },
+            "unit": "short",
+            "decimals": 0
+          }
+        },
+        "options": {
+          "graphMode": "area",
+          "colorMode": "background",
+          "textMode": "value_and_name",
+          "reduceOptions": {
+            "values": false,
+            "calcs": ["lastNotNull"]
+          }
+        }
+      },
+      {
+        "id": 4,
+        "title": "🏢 各租戶端點數量趨勢（可多選）",
+        "type": "timeseries",
+        "gridPos": {"h": 10, "w": 24, "x": 0, "y": 8},
+        "targets": [
+          {
+            "datasource": "InfluxDB",
+            "query": "from(bucket: \"crowdstrike\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r[\"_measurement\"] == \"crowdstrike_hosts\")\n  |> filter(fn: (r) => r[\"_field\"] == \"host_count\")\n  |> filter(fn: (r) => r[\"cid\"] =~ /${cid:regex}/)\n  |> aggregateWindow(every: v.windowPeriod, fn: last, createEmpty: false)\n  |> yield(name: \"last\")",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "palette-classic"},
+            "custom": {
+              "lineWidth": 2,
+              "fillOpacity": 5,
+              "axisPlacement": "auto",
+              "drawStyle": "line",
+              "showPoints": "auto"
+            }
+          },
+          "overrides": [
+            {
+              "matcher": {"id": "byRegexp", "options": ".*is_pinned=true.*"},
+              "properties": [
+                {"id": "custom.lineWidth", "value": 3},
+                {"id": "custom.fillOpacity", "value": 15}
+              ]
+            }
+          ]
+        },
+        "options": {
+          "legend": {
+            "displayMode": "table",
+            "placement": "right",
+            "calcs": ["last", "min", "max", "mean"]
+          },
+          "tooltip": {"mode": "multi"}
+        }
+      },
+      {
+        "id": 5,
+        "title": "📋 當前所有租戶端點數量",
+        "type": "table",
+        "gridPos": {"h": 10, "w": 24, "x": 0, "y": 18},
+        "targets": [
+          {
+            "datasource": "InfluxDB",
+            "query": "from(bucket: \"crowdstrike\")\n  |> range(start: -5m)\n  |> filter(fn: (r) => r[\"_measurement\"] == \"crowdstrike_hosts\")\n  |> filter(fn: (r) => r[\"_field\"] == \"host_count\")\n  |> last()\n  |> group(columns: [\"tenant_name\", \"cid\", \"is_pinned\"])\n  |> sort(columns: [\"_value\"], desc: true)",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "custom": {"align": "auto"}
+          },
+          "overrides": [
+            {
+              "matcher": {"id": "byName", "options": "tenant_name"},
+              "properties": [
+                {"id": "displayName", "value": "租戶名稱"},
+                {"id": "custom.width", "value": 300}
+              ]
+            },
+            {
+              "matcher": {"id": "byName", "options": "cid"},
+              "properties": [
+                {"id": "displayName", "value": "CID"},
+                {"id": "custom.width", "value": 300}
+              ]
+            },
+            {
+              "matcher": {"id": "byName", "options": "is_pinned"},
+              "properties": [
+                {"id": "displayName", "value": "重點租戶"},
+                {"id": "custom.width", "value": 100}
+              ]
+            },
+            {
+              "matcher": {"id": "byName", "options": "_value"},
+              "properties": [
+                {"id": "displayName", "value": "端點數量"},
+                {"id": "custom.width", "value": 120}
+              ]
+            }
+          ]
+        },
+        "options": {
+          "showHeader": true,
+          "sortBy": [
+            {"displayName": "端點數量", "desc": true}
+          ]
+        },
+        "transformations": [
+          {
+            "id": "organize",
+            "options": {
+              "excludeByName": {
+                "_start": true,
+                "_stop": true,
+                "_time": true,
+                "_measurement": true,
+                "_field": true,
+                "parent_cid": true
+              },
+              "indexByName": {
+                "tenant_name": 0,
+                "cid": 1,
+                "is_pinned": 2,
+                "_value": 3
+              }
+            }
+          }
+        ]
+      },
+      {
+        "id": 6,
+        "title": "⚠️  重點租戶 (Pinned) 變動趨勢",
+        "type": "timeseries",
+        "gridPos": {"h": 8, "w": 24, "x": 0, "y": 28},
+        "targets": [
+          {
+            "datasource": "InfluxDB",
+            "query": "from(bucket: \"crowdstrike\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r[\"_measurement\"] == \"crowdstrike_hosts\")\n  |> filter(fn: (r) => r[\"_field\"] == \"host_count\")\n  |> filter(fn: (r) => r[\"is_pinned\"] == \"True\")\n  |> aggregateWindow(every: v.windowPeriod, fn: last, createEmpty: false)\n  |> yield(name: \"last\")",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "palette-classic"},
+            "custom": {
+              "lineWidth": 3,
+              "fillOpacity": 20,
+              "axisPlacement": "auto",
+              "drawStyle": "line",
+              "showPoints": "always",
+              "pointSize": 5
+            }
+          }
+        },
+        "options": {
+          "legend": {
+            "displayMode": "table",
+            "placement": "bottom",
+            "calcs": ["last", "delta", "mean"]
+          }
+        }
+      },
+      {
+        "id": 7,
+        "title": "🖥️  系統資源使用率",
+        "type": "timeseries",
+        "gridPos": {"h": 6, "w": 12, "x": 0, "y": 36},
+        "targets": [
+          {
+            "datasource": "Prometheus",
+            "expr": "100 - (avg(irate(cpu_usage_idle{cpu=\"cpu-total\"}[5m])) * 100)",
+            "refId": "CPU",
+            "legendFormat": "CPU Usage %"
+          },
+          {
+            "datasource": "Prometheus",
+            "expr": "mem_used_percent",
+            "refId": "MEM",
+            "legendFormat": "Memory Usage %"
+          }
+        ]
+      },
+      {
+        "id": 8,
+        "title": "🐳 Docker 容器狀態",
+        "type": "stat",
+        "gridPos": {"h": 6, "w": 12, "x": 12, "y": 36},
+        "targets": [
+          {
+            "datasource": "Prometheus",
+            "expr": "count(up{job=\"pushgateway\"})",
+            "refId": "A",
+            "legendFormat": "Running Containers"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "thresholds"},
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"value": 0, "color": "red"},
+                {"value": 1, "color": "green"}
+              ]
+            }
+          }
+        }
+      }
+    ],
+    "templating": {
+      "list": [
+        {
+          "name": "cid",
+          "type": "query",
+          "datasource": "InfluxDB",
+          "multi": true,
+          "includeAll": true,
+          "query": "import \"influxdata/influxdb/schema\"\nschema.tagValues(\n  bucket: \"crowdstrike\",\n  tag: \"cid\"\n)",
+          "refresh": 1,
+          "allValue": ".*"
+        }
+      ]
+    },
+    "annotations": {
+      "list": [
+        {
+          "datasource": "Prometheus",
+          "enable": true,
+          "expr": "ALERTS{alertstate=\"firing\"}",
+          "iconColor": "red",
+          "name": "Alerts",
+          "tagKeys": "alertname,severity",
+          "textFormat": "{{ $labels.alertname }}: {{ $labels.summary }}",
+          "titleFormat": "Alert"
+        }
+      ]
+    }
+  },
+  "overwrite": true
+}

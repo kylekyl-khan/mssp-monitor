@@ -1,0 +1,171 @@
+services:
+  # ============================================
+  # InfluxDB - 時序資料庫 (歷史檔案室)
+  # ============================================
+  influxdb:
+    image: influxdb:2.7
+    container_name: mssp-influxdb
+    ports:
+      - "8086:8086"
+    volumes:
+      - influxdb-data:/var/lib/influxdb2
+      - ./influxdb:/etc/influxdb2
+    environment:
+      - DOCKER_INFLUXDB_INIT_MODE=setup
+      - DOCKER_INFLUXDB_INIT_USERNAME=${INFLUXDB_ADMIN_USER}
+      - DOCKER_INFLUXDB_INIT_PASSWORD=${INFLUXDB_ADMIN_PASSWORD}
+      - DOCKER_INFLUXDB_INIT_ORG=${INFLUXDB_ORG}
+      - DOCKER_INFLUXDB_INIT_BUCKET=${INFLUXDB_BUCKET}
+      - DOCKER_INFLUXDB_INIT_ADMIN_TOKEN=${INFLUXDB_ADMIN_TOKEN}
+    networks:
+      - monitoring
+    restart: unless-stopped
+
+  # ============================================
+  # Prometheus - 監控系統 (即時哨兵)
+  # ============================================
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: mssp-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./prometheus/rules:/etc/prometheus/rules
+      - prometheus-data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=30d'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+    networks:
+      - monitoring
+    restart: unless-stopped
+
+  # ============================================
+  # Telegraf - 資料收集器 (傳遞員)
+  # ============================================
+  telegraf:
+    image: telegraf:latest
+    container_name: mssp-telegraf
+    user: "0:0"  # Run as root to access Docker socket on Windows
+    volumes:
+      - ./telegraf/telegraf.conf:/etc/telegraf/telegraf.conf:ro
+      - ./app:/app:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    environment:
+      - INFLUXDB_URL=http://influxdb:8086
+      - INFLUXDB_TOKEN=${INFLUXDB_ADMIN_TOKEN}
+      - INFLUXDB_ORG=${INFLUXDB_ORG}
+      - INFLUXDB_BUCKET=${INFLUXDB_BUCKET}
+      - CS_CLIENT_ID=${CS_CLIENT_ID}
+      - CS_CLIENT_SECRET=${CS_CLIENT_SECRET}
+      - CS_BASE_URL=${CS_BASE_URL}
+      - SMTP_USER=${SMTP_USER}
+      - SMTP_PASSWORD=${SMTP_PASSWORD}
+      - SMTP_TO=${SMTP_TO}
+    networks:
+      - monitoring
+    restart: unless-stopped
+    depends_on:
+      - influxdb
+
+  # ============================================
+  # Python Monitor - CrowdStrike 監控腳本
+  # ============================================
+  mssp-monitor:
+    build:
+      context: ./app
+      dockerfile: Dockerfile
+    container_name: mssp-monitor
+    volumes:
+      - ./app:/app
+      - monitor-data:/data
+    environment:
+      - CS_CLIENT_ID=${CS_CLIENT_ID}
+      - CS_CLIENT_SECRET=${CS_CLIENT_SECRET}
+      - CS_BASE_URL=${CS_BASE_URL}
+      - CHECK_INTERVAL=${CHECK_INTERVAL}
+      - PARENT_DISPLAY_NAME=${PARENT_DISPLAY_NAME}
+      - PINNED_CIDS=${PINNED_CIDS}
+      - LICENSE_THRESHOLD=${LICENSE_THRESHOLD}
+      - SMTP_USER=${SMTP_USER}
+      - SMTP_PASSWORD=${SMTP_PASSWORD}
+      - SMTP_TO=${SMTP_TO}
+      - INFLUXDB_URL=http://influxdb:8086
+      - INFLUXDB_TOKEN=${INFLUXDB_ADMIN_TOKEN}
+      - INFLUXDB_ORG=${INFLUXDB_ORG}
+      - INFLUXDB_BUCKET=${INFLUXDB_BUCKET}
+      - PROMETHEUS_PUSHGATEWAY=http://prometheus-pushgateway:9091
+    networks:
+      - monitoring
+    restart: unless-stopped
+    depends_on:
+      - influxdb
+      - telegraf
+
+  # ============================================
+  # Prometheus Pushgateway (供 Python 推送指標)
+  # ============================================
+  prometheus-pushgateway:
+    image: prom/pushgateway:latest
+    container_name: mssp-pushgateway
+    ports:
+      - "9091:9091"
+    networks:
+      - monitoring
+    restart: unless-stopped
+
+  # ============================================
+  # Grafana - 視覺化平台 (指揮中心)
+  # ============================================
+  grafana:
+    image: grafana/grafana:latest
+    container_name: mssp-grafana
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning
+      - ./grafana/dashboards:/var/lib/grafana/dashboards
+    environment:
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD}
+      - GF_INSTALL_PLUGINS=grafana-clock-panel,grafana-simple-json-datasource
+      - GF_SERVER_ROOT_URL=http://localhost:3000
+    networks:
+      - monitoring
+    restart: unless-stopped
+    depends_on:
+      - influxdb
+      - prometheus
+
+  # ============================================
+  # AlertManager (可選 - 告警管理)
+  # ============================================
+  alertmanager:
+    image: prom/alertmanager:latest
+    container_name: mssp-alertmanager
+    ports:
+      - "9093:9093"
+    volumes:
+      - ./prometheus/alertmanager.yml:/etc/alertmanager/alertmanager.yml
+      - alertmanager-data:/alertmanager
+    command:
+      - '--config.file=/etc/alertmanager/alertmanager.yml'
+      - '--storage.path=/alertmanager'
+    networks:
+      - monitoring
+    restart: unless-stopped
+
+networks:
+  monitoring:
+    driver: bridge
+
+volumes:
+  influxdb-data:
+  prometheus-data:
+  grafana-data:
+  alertmanager-data:
+  monitor-data:
